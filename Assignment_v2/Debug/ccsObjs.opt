@@ -1,0 +1,1 @@
+"./sar.obj" "./main.obj" "./hadamard.obj" "./AIC_func.obj" -l"rts55x.lib" -l"C:\Users\karn001\Desktop\Exercises\Part 2 of 2_By Prof Seow CK\EE4413_C515\C5515_Support_Files\usbstk5515bsl.lib" "C:/Users/karn001/Desktop/Exercises/Part 2 of 2_By Prof Seow CK/EE4413_C515/C5515_Support_Files/C5515_Lib/dsplib_2.40.00/55xdspx_LARGE.lib" "../lnkx.cmd" 

@@ -1,0 +1,2 @@
+#define MODE_BYPASS 0x00
+#define MODE_SCRAMBLE 0x01
