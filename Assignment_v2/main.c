@@ -109,9 +109,7 @@ void main(void) {
 								
 				AIC_write2(out[j], out[j]);
 				j++; j %= FSIZE;
-				if (j == 0){
-					k = !k;
-				}
+				k = (j == 0);
 				break;
         }        	
         end_time = TIMCNT1_0;
