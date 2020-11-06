@@ -11,40 +11,20 @@
 #include "mode.h"
 #include "hadamard.h"
 
-//#define VERBOSE 1
+#define TCR0		*((ioport volatile Uint16 *) 0x1810) 
+#define TIMCNT1_0	*((ioport volatile Uint16 *) 0x1814) 
+#define TIME_START	0x8001
+#define TIME_STOP	0x8000
 
 #define FSIZE (16)
 
-Uint16 mode = MODE_SCRAMBLE;
+Uint16 mode = MODE_SCRAMBLE, old_mode;
 double scale = 8.0;
 Int16 x;
 Int16 h[FSIZE*FSIZE] = {0};
 Int16 out[FSIZE] = {0};
 Int16 buffer[FSIZE*(FSIZE+2)] = {0};
 Int16 dummy = 0;
-
-/*Int16 firc(Uint16 i, Int16 *arr, Int16 *coef, Uint16 TAPS)
-{
-	Int32 sum;
-	Uint16 j;
-	Uint32 index;
-	sum=0;
-
-	//The actual filter work
-	for(j=0; j<TAPS; j++)
-	{
-		if(i>=j)
- 			index = i - j;
-		else 
- 			index = TAPS + i - j;
-		sum += arr[index] * coef[j];
-	}
-//	sum = sum + 0x00004000;			// So we round rather than truncate.
-	
-//		printf("\n\n");
-	return (Int16) (sum);  	// Conversion from 32 Q30 to 16 Q15.
-
-}*/
 
 
 /**
@@ -59,12 +39,10 @@ Uint16 set_mode() {
             	return MODE_BYPASS;
             }
         case SW2:
-        	if (mode == MODE_BYPASS){
+        	if (mode != MODE_SCRAMBLE){
             	return MODE_SCRAMBLE;
         	} else {
-        		AIC_read2(&dummy, &dummy);
-        		printf("Skipping a sample\n");
-        		return mode;
+        		return MODE_DESCRAMBLE;
         	}
         default: 
         	return mode;
@@ -72,55 +50,72 @@ Uint16 set_mode() {
 }
 
 void main(void) {
-	Uint16 i, j, o;
+	Uint16 i, j, k, o;
+	
     USBSTK5515_init();  // Initializing the Processor
     AIC_init();         // Initializing the Audio Codec
 
     hadamard(FSIZE, h);  // Generate hadamard matrix
     
+    // map to Q15
 	for(i = 0; i < FSIZE; i++){
 		for(j = 0; j < FSIZE; j++){
-//    		printf("%2d, ", *(h + i*FSIZE+j));
 			if (h[i*FSIZE+j] == 1){
 				h[i*FSIZE+j] = 0x7FFF;
 			} else {
 				h[i*FSIZE+j] = 0x8000;
 			}
 		}
-//		printf("\n");
     }
     
     for(j = 0; j < FSIZE*(FSIZE+2); j++){
     	buffer[j] = 0;
     }
    
-    j = 0;
+    j = 0; k = 0;
+    TCR0 = TIME_STOP; TCR0 = TIME_START;
     while (1) {
+    	old_mode = mode;
         mode = set_mode();
         
+        if (mode != old_mode && mode != MODE_BYPASS){
+        	AIC_read2(&dummy, &dummy);
+        	j = 0; k = 0;
+        	for(j = 0; j < FSIZE*(FSIZE+2); j++){
+		    	buffer[j] = 0;
+		    }
+        }
+                
+        start_time = TIMCNT1_0;
 		AIC_read2(&x, &dummy);
         switch(mode){
 	        case MODE_BYPASS:
 				AIC_write2(x, x);
 				break;
 			case MODE_SCRAMBLE:
-//				in[j] = x;	
-				
+			case MODE_DESCRAMBLE:				
 				x = (Int16)(x/scale);
 				
+								
 				for (i = 0; i < FSIZE; i++){
-//					out[i] = firc(j, in, h + i*FSIZE, FSIZE);
-					o = fir(&x, h + i*FSIZE, out + i, buffer + i*(FSIZE+2), 1, FSIZE);		
+					o = fir(&x, h + i*FSIZE, &dummy, buffer + i*(FSIZE+2), 1, FSIZE);
+					if (k){
+						out[i] = dummy;					
+					}		
 					if (o){
 						printf("Overflow!\n");
 					}		
 				}
-				
-				
+								
 				AIC_write2(out[j], out[j]);
 				j++; j %= FSIZE;
+				if (j == 0){
+					k = !k;
+				}
 				break;
         }        	
+        end_time = TIMCNT1_0;
+		delta_time = start_time-end_time;
     }
 }
 
